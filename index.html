@@ -3,26 +3,28 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GitHub JS Fetcher + Content</title>
+  <title>JS Vulnerability Scanner</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-900 text-white min-h-screen p-4">
+<body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col items-center p-4">
+  <h1 class="text-2xl font-bold mb-4">GitHub JS Vulnerability Scanner</h1>
 
-  <div class="max-w-xl mx-auto">
-    <h1 class="text-2xl font-bold mb-4 text-center">GitHub JS Fetcher + Content</h1>
-
-    <!-- Input -->
+  <!-- Input section -->
+  <div class="w-full max-w-xl mb-4">
     <input id="repoUrl" type="text" placeholder="Enter GitHub repo URL"
-      class="w-full p-2 rounded bg-gray-800 text-white mb-4" />
-
-    <!-- Button -->
-    <button id="fetchBtn" class="w-full p-2 bg-blue-600 rounded hover:bg-blue-700 mb-4">Fetch JS Files & Content</button>
-
-    <!-- Output -->
-    <div id="output" class="space-y-2"></div>
+      class="w-full p-2 rounded bg-gray-800 border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+    <button id="fetchBtn" class="mt-2 w-full bg-blue-600 hover:bg-blue-700 p-2 rounded font-semibold">
+      Fetch & Scan JS Files
+    </button>
   </div>
 
-  <script>
+  <!-- Output section -->
+  <div id="output" class="w-full max-w-xl space-y-2"></div>
+
+  <!-- JS -->
+  <script type="module">
+    import { scanCode } from './rules.js';
+
     const fetchBtn = document.getElementById("fetchBtn");
     const output = document.getElementById("output");
     const repoInput = document.getElementById("repoUrl");
@@ -41,8 +43,10 @@
     }
 
     async function fetchRepoFiles(repoUrl) {
+      output.innerHTML = "";
       try {
-        output.innerHTML = "Fetching JS files...";
+        output.innerHTML = "<p class='text-yellow-400'>Fetching JS files...</p>";
+
         const match = repoUrl.match(/github\.com\/([^\/]+)\/([^\/]+)/);
         if (!match) throw new Error("Invalid GitHub URL");
 
@@ -50,12 +54,11 @@
         const repo = match[2];
 
         const jsFiles = await fetchJSFiles(owner, repo);
-        if (jsFiles.length === 0) {
-          output.innerHTML = "<span class='text-yellow-400'>No JS files found.</span>";
+
+        if (!jsFiles.length) {
+          output.innerHTML = "<p class='text-yellow-400'>No JS files found in this repo.</p>";
           return;
         }
-
-        output.innerHTML = "";
 
         for (const file of jsFiles) {
           const div = document.createElement("div");
@@ -70,14 +73,37 @@
           contentDiv.className = "max-h-64 overflow-auto hidden bg-gray-700 p-2 rounded text-xs";
           div.appendChild(contentDiv);
 
+          const findingsDiv = document.createElement("div");
+          findingsDiv.className = "mt-2 space-y-1 hidden";
+          div.appendChild(findingsDiv);
+
           title.addEventListener("click", async () => {
-            if (contentDiv.textContent === "") {
+            if (!contentDiv.textContent) {
               contentDiv.textContent = "Fetching content...";
               const content = await fetchFileContent(owner, repo, file.path);
               contentDiv.textContent = content;
               contentDiv.classList.remove("hidden");
+
+              // Scan using rules.js
+              const findings = scanCode(content, file.path);
+              findingsDiv.innerHTML = "";
+              if (!findings.length) {
+                const noFind = document.createElement("div");
+                noFind.className = "p-2 bg-green-700 rounded";
+                noFind.textContent = "No issues detected";
+                findingsDiv.appendChild(noFind);
+              } else {
+                findings.forEach(f => {
+                  const fDiv = document.createElement("div");
+                  fDiv.className = `p-2 rounded ${f.severity === "HIGH" ? "bg-red-600" : "bg-yellow-600"}`;
+                  fDiv.textContent = `${f.name} - ${f.severity}: ${f.description}`;
+                  findingsDiv.appendChild(fDiv);
+                });
+              }
+              findingsDiv.classList.remove("hidden");
             } else {
               contentDiv.classList.toggle("hidden");
+              findingsDiv.classList.toggle("hidden");
             }
           });
 
@@ -85,7 +111,7 @@
         }
 
       } catch (err) {
-        output.innerHTML = `<span class='text-red-500'>Error: ${err.message}</span>`;
+        output.innerHTML = `<p class='text-red-500'>Error: ${err.message}</p>`;
       }
     }
 
