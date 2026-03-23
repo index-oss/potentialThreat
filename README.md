@@ -6,3 +6,8 @@ with my intelligence for smart threat
 this is very much smart recon anayalsis the public
 repo 
 it save our time recon, check the logic
+
+
+in this first we will
+correct add file folder scan 
+than console view and api
