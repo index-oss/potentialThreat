@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JS Vulnerability Scanner (Gemini AI)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col items-center p-4">
+  <h1 class="text-2xl font-bold mb-4">GitHub JS Vulnerability Scanner + Gemini AI</h1>
+
+  <div class="w-full max-w-xl mb-4">
+    <input id="repoUrl" type="text" placeholder="Enter GitHub repo URL"
+      class="w-full p-2 rounded bg-gray-800 border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+    <button id="fetchBtn" class="mt-2 w-full bg-blue-600 hover:bg-blue-700 p-2 rounded font-semibold transition">
+      Fetch & Scan Files Fast
+    </button>
+  </div>
+
+  <div id="output" class="w-full max-w-xl space-y-2"></div>
+
+  <script type="module">
+    import { scanCode } from './rules.js';
+
+    // ==========================================
+    // 🛑 HARDCODE YOUR GOOGLE GEMINI API KEY HERE
+    // ==========================================
+    const GEMINI_API_KEY = "AIzaSyD3mYL97PJpfXN5K_dpexi3kvdKaYAYBN4";
+    // ==========================================
+
+    const fetchBtn = document.getElementById("fetchBtn");
+    const output = document.getElementById("output");
+    const repoInput = document.getElementById("repoUrl");
+
+    // NEW: DIRECT GEMINI API VERIFICATION
+    async function verifyWithGemini(finding) {
+      if (!GEMINI_API_KEY || GEMINI_API_KEY === "YOUR_GEMINI_API_KEY_HERE") return "UNVERIFIED";
+
+      const prompt = `Review this code: \`${finding.snippet}\`. Flagged for: ${finding.name}. Is it a genuine exploit or a false positive? Reply with EXACTLY ONE WORD: "VULNERABLE" or "SAFE".`;
+
+      try {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }]
+          })
+        });
+        const data = await res.json();
+        
+        // Parsing Gemini's response structure
+        const reply = data.candidates[0].content.parts[0].text.trim().toUpperCase();
+        return reply.includes("SAFE") ? "SAFE" : "VULNERABLE";
+      } catch (err) {
+        console.error("Gemini API Error:", err);
+        return "ERROR";
+      }
+    }
+
+    async function fetchRepoFiles(repoUrl) {
+      output.innerHTML = "";
+      try {
+        output.innerHTML = "<p class='text-yellow-400'>1. Detecting repository branch...</p>";
+
+        const match = repoUrl.match(/github\.com\/([^\/]+)\/([^\/]+)/);
+        if (!match) throw new Error("Invalid GitHub URL");
+
+        const owner = match[1];
+        const repo = match[2].replace('.git', '');
+
+        const repoRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`);
+        if (!repoRes.ok) throw new Error("Repo not found or API limit reached.");
+        const repoData = await repoRes.json();
+        const branch = repoData.default_branch;
+
+        output.innerHTML = `<p class='text-yellow-400'>2. Fetching tree from branch: ${branch}...</p>`;
+
+        const treeRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`);
+        const treeData = await treeRes.json();
+        
+        const sourceFiles = treeData.tree.filter(f => f.type === "blob" && /\.(js|jsx|ts|tsx)$/i.test(f.path));
+
+        if (!sourceFiles.length) {
+          output.innerHTML = "<p class='text-yellow-400'>No JS/TS files found in this repo.</p>";
+          return;
+        }
+
+        output.innerHTML = `<p class='text-yellow-400'>3. Downloading and scanning ${sourceFiles.length} files instantly...</p>`;
+        
+        const resultsContainer = document.createElement("div");
+        resultsContainer.className = "space-y-2 mt-4";
+
+        const BATCH_SIZE = 10;
+        for (let i = 0; i < sourceFiles.length; i += BATCH_SIZE) {
+          const batch = sourceFiles.slice(i, i + BATCH_SIZE);
+          
+          await Promise.all(batch.map(async (file) => {
+            const url = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${file.path}`;
+            try {
+              const res = await fetch(url);
+              const content = await res.text();
+              const findings = scanCode(content, file.path);
+
+              const div = document.createElement("div");
+              div.className = "bg-gray-800 p-2 rounded";
+
+              const title = document.createElement("button");
+              title.innerHTML = `<strong>${findings.length > 0 ? '🔴' : '🟢'} ${file.path}</strong> <span class="text-xs text-gray-400 ml-2">(${findings.length} alerts)</span>`;
+              title.className = "w-full text-left mb-1 hover:bg-gray-700 p-2 rounded transition flex justify-between";
+              div.appendChild(title);
+
+              const contentDiv = document.createElement("pre");
+              contentDiv.className = "max-h-64 overflow-auto hidden bg-gray-900 p-3 rounded text-xs border border-gray-600 mt-2 text-gray-300";
+              contentDiv.textContent = content; 
+              div.appendChild(contentDiv);
+
+              const findingsDiv = document.createElement("div");
+              findingsDiv.className = "mt-2 space-y-2 hidden";
+              div.appendChild(findingsDiv);
+
+              if (!findings.length) {
+                const noFind = document.createElement("div");
+                noFind.className = "p-2 bg-green-800 text-green-100 rounded text-sm";
+                noFind.textContent = "No issues detected";
+                findingsDiv.appendChild(noFind);
+              } else {
+                findings.forEach(f => {
+                  const fDiv = document.createElement("div");
+                  fDiv.className = `p-3 rounded text-sm border ${f.severity === "HIGH" ? "bg-red-900 border-red-500 text-red-100" : "bg-yellow-900 border-yellow-500 text-yellow-100"}`;
+                  
+                  // Added AI Status Span
+                  fDiv.innerHTML = `
+                    <div class="flex justify-between items-start mb-1">
+                      <strong>Line ${f.line}: ${f.name}</strong>
+                      <span class="ai-status text-xs italic opacity-80">⏳ Gemini Analyzing...</span>
+                    </div>
+                    <code class="block bg-black p-2 rounded text-gray-300 font-mono text-xs overflow-x-auto">${f.snippet}</code>
+                    <p class="text-xs opacity-90 mt-1">${f.description}</p>
+                  `;
+                  findingsDiv.appendChild(fDiv);
+
+                  // Trigger Gemini AI
+                  if (GEMINI_API_KEY && GEMINI_API_KEY !== "YOUR_GEMINI_API_KEY_HERE") {
+                    verifyWithGemini(f).then(verdict => {
+                      const statusSpan = fDiv.querySelector('.ai-status');
+                      if (verdict === "SAFE") {
+                        fDiv.className = "p-3 rounded text-sm border bg-gray-800 border-gray-600 text-gray-400 opacity-70";
+                        statusSpan.textContent = "✅ Gemini: False Positive";
+                        fDiv.style.textDecoration = "line-through";
+                        fDiv.querySelector('code').style.textDecoration = "none";
+                      } else if (verdict === "VULNERABLE") {
+                        statusSpan.textContent = "🚨 Gemini: CONFIRMED";
+                        statusSpan.className = "ai-status text-xs font-bold text-red-300 bg-red-900 px-2 rounded";
+                      } else {
+                        statusSpan.textContent = "⚠️ Gemini: Error";
+                      }
+                    });
+                  } else {
+                     fDiv.querySelector('.ai-status').textContent = "⚠️ Unverified (No Gemini Key)";
+                  }
+                });
+              }
+
+              title.addEventListener("click", () => {
+                contentDiv.classList.toggle("hidden");
+                findingsDiv.classList.toggle("hidden");
+              });
+
+              resultsContainer.appendChild(div);
+
+            } catch (err) {
+              console.error(`Failed to scan ${file.path}`);
+            }
+          }));
+        }
+
+        output.innerHTML = `<p class='text-green-400 font-bold mb-4'>✅ Scan Complete! Evaluated ${sourceFiles.length} files.</p>`;
+        output.appendChild(resultsContainer);
+
+      } catch (err) {
+        output.innerHTML = `<p class='text-red-500'>Error: ${err.message}</p>`;
+      }
+    }
+
+    fetchBtn.addEventListener("click", () => {
+      const url = repoInput.value.trim();
+      if (url) fetchRepoFiles(url);
+    });
+
+  </script>
+</body>
+</html>
