@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>GhostScan - JS Vulnerability Scanner</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    *{
+      font-family: 'Inter', sans-serif;
+    }
+
+    body{
+      background:
+      radial-gradient(circle at top left,#0f172a,#020617 40%),
+      radial-gradient(circle at bottom right,#111827,#000 50%);
+      overflow-x:hidden;
+    }
+
+    ::-webkit-scrollbar{
+      width:8px;
+    }
+
+    ::-webkit-scrollbar-thumb{
+      background:#334155;
+      border-radius:20px;
+    }
+
+    .glass{
+      background: rgba(255,255,255,0.04);
+      backdrop-filter: blur(18px);
+      border:1px solid rgba(255,255,255,0.08);
+      box-shadow:
+      0 0 20px rgba(0,0,0,0.3),
+      inset 0 0 20px rgba(255,255,255,0.02);
+    }
+
+    .glow-blue{
+      box-shadow:
+      0 0 10px rgba(59,130,246,.5),
+      0 0 40px rgba(59,130,246,.2);
+    }
+
+    .glow-red{
+      box-shadow:
+      0 0 10px rgba(239,68,68,.5),
+      0 0 40px rgba(239,68,68,.2);
+    }
+
+    .animate-float{
+      animation: float 5s ease-in-out infinite;
+    }
+
+    @keyframes float{
+      0%{transform:translateY(0px)}
+      50%{transform:translateY(-10px)}
+      100%{transform:translateY(0px)}
+    }
+
+    .grid-bg{
+      background-image:
+      linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px);
+
+      background-size:40px 40px;
+    }
+
+    .terminal-text{
+      color:#4ade80;
+      font-family: monospace;
+      white-space: pre-line;
+    }
+
+    .pulse-danger{
+      animation: pulseRed 1.5s infinite;
+    }
+
+    @keyframes pulseRed{
+      0%{
+        box-shadow:0 0 0 0 rgba(239,68,68,.5);
+      }
+      70%{
+        box-shadow:0 0 0 15px rgba(239,68,68,0);
+      }
+      100%{
+        box-shadow:0 0 0 0 rgba(239,68,68,0);
+      }
+    }
+
+    .hover-card{
+      transition: all .3s ease;
+    }
+
+    .hover-card:hover{
+      transform: translateY(-5px);
+      border-color: rgba(59,130,246,.4);
+    }
+
+    .finding-high{
+      background: rgba(239,68,68,.1);
+      border:1px solid rgba(239,68,68,.4);
+    }
+
+    .finding-medium{
+      background: rgba(234,179,8,.1);
+      border:1px solid rgba(234,179,8,.4);
+    }
+
+    .finding-low{
+      background: rgba(59,130,246,.1);
+      border:1px solid rgba(59,130,246,.4);
+    }
+  </style>
+</head>
+
+<body class="text-white min-h-screen grid-bg">
+
+  <!-- Floating Blurs -->
+  <div class="fixed top-[-150px] left-[-100px] w-[400px] h-[400px] bg-blue-500/20 blur-[120px] rounded-full"></div>
+  <div class="fixed bottom-[-150px] right-[-100px] w-[400px] h-[400px] bg-purple-500/20 blur-[120px] rounded-full"></div>
+
+  <div class="flex">
+
+    <!-- SIDEBAR -->
+    <aside class="w-[270px] h-screen glass border-r border-white/10 fixed left-0 top-0 p-6 hidden lg:block">
+
+      <div class="flex items-center gap-3 mb-10">
+        <div class="w-12 h-12 rounded-2xl bg-blue-600 glow-blue flex items-center justify-center text-xl font-black">
+          G
+        </div>
+
+        <div>
+          <h1 class="font-bold text-xl">GhostScan</h1>
+          <p class="text-sm text-gray-400">JS Security Platform</p>
+        </div>
+      </div>
+
+      <nav class="space-y-3">
+
+        <button class="w-full text-left px-4 py-3 rounded-xl bg-blue-600/20 border border-blue-500/30">
+          Dashboard
+        </button>
+
+        <button class="w-full text-left px-4 py-3 rounded-xl hover:bg-white/5 transition">
+          Repositories
+        </button>
+
+        <button class="w-full text-left px-4 py-3 rounded-xl hover:bg-white/5 transition">
+          Live Scan
+        </button>
+
+        <button class="w-full text-left px-4 py-3 rounded-xl hover:bg-white/5 transition">
+          Threat Feed
+        </button>
+
+        <button class="w-full text-left px-4 py-3 rounded-xl hover:bg-white/5 transition">
+          Rules Engine
+        </button>
+
+        <button class="w-full text-left px-4 py-3 rounded-xl hover:bg-white/5 transition">
+          Reports
+        </button>
+
+        <button class="w-full text-left px-4 py-3 rounded-xl hover:bg-white/5 transition">
+          Settings
+        </button>
+
+      </nav>
+
+      <div class="absolute bottom-6 left-6 right-6 glass rounded-2xl p-4">
+
+        <div class="flex justify-between items-center mb-3">
+          <h3 class="font-semibold">Threat Level</h3>
+          <span class="text-red-400 font-bold">HIGH</span>
+        </div>
+
+        <div class="w-full bg-white/10 rounded-full h-3 overflow-hidden">
+          <div class="bg-red-500 h-full w-[82%] pulse-danger"></div>
+        </div>
+
+        <p class="mt-3 text-sm text-gray-400">
+          Active JS vulnerability signatures detected globally.
+        </p>
+
+      </div>
+
+    </aside>
+
+    <!-- MAIN -->
+    <main class="flex-1 lg:ml-[270px] p-6">
+
+      <!-- HERO -->
+      <section class="glass rounded-3xl p-8 relative overflow-hidden mb-8">
+
+        <div class="absolute right-[-80px] top-[-80px] w-[220px] h-[220px] rounded-full bg-blue-500/20 blur-[100px]"></div>
+
+        <div class="relative z-10">
+
+          <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-300 text-sm mb-5 animate-float">
+            <span class="w-2 h-2 rounded-full bg-blue-400"></span>
+            Real-Time JavaScript Security Analysis
+          </div>
+
+          <h1 class="text-5xl font-black leading-tight max-w-4xl">
+            Advanced GitHub Repository Vulnerability Scanner
+          </h1>
+
+          <p class="text-gray-400 text-lg mt-5 max-w-3xl">
+            Scan GitHub repositories for dangerous JavaScript patterns,
+            security flaws, insecure APIs, exposed secrets, DOM-based vulnerabilities,
+            and modern web attack vectors.
+          </p>
+
+          <!-- INPUT -->
+          <div class="mt-8 flex flex-col lg:flex-row gap-4">
+
+            <input
+              type="text"
+              placeholder="https://github.com/owner/repo"
+              class="flex-1 bg-black/30 border border-white/10 rounded-2xl px-6 py-4 outline-none focus:border-blue-500"
+            />
+
+            <button class="px-8 py-4 rounded-2xl bg-blue-600 hover:bg-blue-500 transition font-bold glow-blue">
+              Start Deep Scan
+            </button>
+
+          </div>
+
+        </div>
+
+      </section>
+
+      <!-- STATS -->
+      <section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
+
+        <div class="glass rounded-3xl p-6 hover-card">
+          <p class="text-gray-400 mb-3">Files Scanned</p>
+          <h2 class="text-4xl font-black">1,284</h2>
+        </div>
+
+        <div class="glass rounded-3xl p-6 hover-card glow-red">
+          <p class="text-gray-400 mb-3">High Severity</p>
+          <h2 class="text-4xl font-black text-red-400">27</h2>
+        </div>
+
+        <div class="glass rounded-3xl p-6 hover-card">
+          <p class="text-gray-400 mb-3">Medium Severity</p>
+          <h2 class="text-4xl font-black text-yellow-400">46</h2>
+        </div>
+
+        <div class="glass rounded-3xl p-6 hover-card">
+          <p class="text-gray-400 mb-3">Security Score</p>
+          <h2 class="text-4xl font-black text-green-400">72%</h2>
+        </div>
+
+      </section>
+
+      <!-- GRID -->
+      <section class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+
+        <!-- LEFT -->
+        <div class="xl:col-span-2 space-y-6">
+
+          <!-- TERMINAL -->
+          <div class="glass rounded-3xl p-6">
+
+            <div class="flex justify-between items-center mb-6">
+              <h2 class="text-2xl font-bold">Live Scan Terminal</h2>
+
+              <div class="flex gap-2">
+                <span class="w-3 h-3 rounded-full bg-red-500"></span>
+                <span class="w-3 h-3 rounded-full bg-yellow-500"></span>
+                <span class="w-3 h-3 rounded-full bg-green-500"></span>
+              </div>
+            </div>
+
+            <div class="bg-black/40 rounded-2xl p-5 terminal-text text-sm leading-8">
+> Connecting to GitHub API...
+> Repository validated
+> Enumerating blobs...
+> 1,284 JS files detected
+> Running rules engine...
+> Detecting dangerous APIs...
+> HIGH severity finding detected
+> Scan completed successfully
+            </div>
+
+          </div>
+
+          <!-- FINDINGS -->
+          <div class="glass rounded-3xl p-6">
+
+            <div class="flex justify-between items-center mb-6">
+              <h2 class="text-2xl font-bold">Critical Findings</h2>
+
+              <button class="px-4 py-2 rounded-xl bg-white/5 border border-white/10">
+                Export Report
+              </button>
+            </div>
+
+            <div class="space-y-4">
+
+              <!-- HIGH -->
+              <div class="finding-high rounded-2xl p-5">
+
+                <div class="flex justify-between items-start mb-4">
+
+                  <div>
+                    <h3 class="text-xl font-bold text-red-400">
+                      Dangerous eval() Usage
+                    </h3>
+
+                    <p class="text-gray-400 mt-1">
+                      src/utils/parser.js
+                    </p>
+                  </div>
+
+                  <span class="px-3 py-1 rounded-full bg-red-500/20 text-red-400 text-sm font-semibold">
+                    HIGH
+                  </span>
+
+                </div>
+
+                <div class="bg-black/40 rounded-xl p-4 font-mono text-sm overflow-auto">
+eval(userControlledInput)
+                </div>
+
+                <div class="mt-4 text-gray-300 leading-7">
+                  Dynamic code execution detected. Attackers may achieve arbitrary
+                  JavaScript execution through unsanitized user input.
+                </div>
+
+              </div>
+
+              <!-- MEDIUM -->
+              <div class="finding-medium rounded-2xl p-5">
+
+                <div class="flex justify-between items-start mb-4">
+
+                  <div>
+                    <h3 class="text-xl font-bold text-yellow-400">
+                      innerHTML DOM Injection
+                    </h3>
+
+                    <p class="text-gray-400 mt-1">
+                      components/chat.js
+                    </p>
+                  </div>
+
+                  <span class="px-3 py-1 rounded-full bg-yellow-500/20 text-yellow-300 text-sm font-semibold">
+                    MEDIUM
+                  </span>
+
+                </div>
+
+                <div class="bg-black/40 rounded-xl p-4 font-mono text-sm overflow-auto">
+element.innerHTML = userMessage
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+        <!-- RIGHT -->
+        <div class="space-y-6">
+
+          <!-- CHART -->
+          <div class="glass rounded-3xl p-6">
+
+            <h2 class="text-2xl font-bold mb-6">
+              Severity Distribution
+            </h2>
+
+            <canvas id="severityChart"></canvas>
+
+          </div>
+
+          <!-- CATEGORIES -->
+          <div class="glass rounded-3xl p-6">
+
+            <h2 class="text-2xl font-bold mb-6">
+              Vulnerability Categories
+            </h2>
+
+            <div class="space-y-4">
+
+              <div class="flex justify-between">
+                <span>XSS</span>
+                <span class="text-red-400 font-bold">12</span>
+              </div>
+
+              <div class="flex justify-between">
+                <span>RCE</span>
+                <span class="text-red-400 font-bold">4</span>
+              </div>
+
+              <div class="flex justify-between">
+                <span>Secrets Exposure</span>
+                <span class="text-yellow-400 font-bold">8</span>
+              </div>
+
+              <div class="flex justify-between">
+                <span>Open Redirect</span>
+                <span class="text-blue-400 font-bold">3</span>
+              </div>
+
+              <div class="flex justify-between">
+                <span>Prototype Pollution</span>
+                <span class="text-yellow-400 font-bold">5</span>
+              </div>
+
+            </div>
+
+          </div>
+
+          <!-- RECENT -->
+          <div class="glass rounded-3xl p-6">
+
+            <h2 class="text-2xl font-bold mb-6">
+              Recent Scans
+            </h2>
+
+            <div class="space-y-4">
+
+              <div class="bg-black/20 rounded-2xl p-4 border border-white/5">
+                <p class="font-semibold">react-dashboard</p>
+                <p class="text-sm text-gray-400 mt-1">
+                  14 findings • 2 HIGH
+                </p>
+              </div>
+
+              <div class="bg-black/20 rounded-2xl p-4 border border-white/5">
+                <p class="font-semibold">node-auth-api</p>
+                <p class="text-sm text-gray-400 mt-1">
+                  8 findings • 1 HIGH
+                </p>
+              </div>
+
+              <div class="bg-black/20 rounded-2xl p-4 border border-white/5">
+                <p class="font-semibold">nextjs-commerce</p>
+                <p class="text-sm text-gray-400 mt-1">
+                  31 findings • 5 HIGH
+                </p>
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </section>
+
+    </main>
+
+  </div>
+
+  <script>
+    const ctx = document.getElementById('severityChart');
+
+    new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: ['High', 'Medium', 'Low'],
+        datasets: [{
+          data: [27, 46, 18],
+          borderWidth: 0
+        }]
+      },
+      options: {
+        plugins: {
+          legend: {
+            labels: {
+              color: '#fff'
+            }
+          }
+        }
+      }
+    });
+  </script>
+
+</body>
+</html>
