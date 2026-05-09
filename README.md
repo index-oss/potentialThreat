@@ -1,5 +1,3 @@
-This is a sharp, punchy README. It strikes a balance between professional security posture and the "high-performance" feel of a modern auditing tool.
-Here is the complete, formatted Markdown copy you can paste directly into your GitHub README.md.
 # Potential Threat: Automated Security Auditing Engine
 ## Overview
 **Potential Threat** is a high-performance, automated vulnerability research engine designed to identify critical security flaws across public and private GitHub repositories. Unlike standard static analysis tools, it focuses on logic-based vulnerabilities and authorization bypasses that manual audits often miss.
